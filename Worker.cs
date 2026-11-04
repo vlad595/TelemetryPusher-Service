@@ -9,9 +9,8 @@ namespace TelemetryHubPusherService;
 
 public class TelemetryPayload 
 {
-    public string InstanceId { get; set; }
+    public string InstanceId { get; set; } = string.Empty;
 }
-
 public class Worker : BackgroundService
 {
     private readonly ILogger<Worker> _logger;
@@ -31,21 +30,31 @@ public class Worker : BackgroundService
 
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        _connection = await _factory.CreateConnectionAsync();
-        _channel = await _connection.CreateChannelAsync();
-        await _channel.QueueDeclareAsync("metrics_queue", true, false, false, null);
 
-        var hubUrl = _config["HubUrl"] ?? "localhost";
-        _hubConnection = new HubConnectionBuilder().WithUrl(hubUrl).WithAutomaticReconnect().Build();
+        try
+        {
+            _connection = await _factory.CreateConnectionAsync();
+            _channel = await _connection.CreateChannelAsync();
+            await _channel.QueueDeclareAsync("metrics_queue", true, false, false, null);
 
-        await _hubConnection.StartAsync(cancellationToken);
-        await base.StartAsync(cancellationToken);
+            var hubUrl = _config["HubUrl"] ?? "localhost";
+            _hubConnection = new HubConnectionBuilder().WithUrl(hubUrl).WithAutomaticReconnect().Build();
+            await _hubConnection.StartAsync(cancellationToken);
+            await base.StartAsync(cancellationToken);
+        }catch(Exception ex)
+        {
+            _logger.LogError(ex, "Error while trying to connect to hub: {Message}", ex.Message);
+        }
     }
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (_channel == null)
         {
             _logger.LogError("Channel is not initialized. Returning...");
+            return;
+        }
+        if (_hubConnection?.State == HubConnectionState.Disconnected)
+        {
             return;
         }
         var consumer = new AsyncEventingBasicConsumer(_channel);
@@ -87,11 +96,11 @@ public class Worker : BackgroundService
     }
     public override void Dispose()
     {
-        _channel.CloseAsync();
-        _channel.Dispose();
-        _connection.CloseAsync();
-        _connection.Dispose();
-        _hubConnection.DisposeAsync();
+        _channel?.CloseAsync();
+        _channel?.Dispose();
+        _connection?.CloseAsync();
+        _connection?.Dispose();
+        _hubConnection?.DisposeAsync();
         base.Dispose();
     }
 }
