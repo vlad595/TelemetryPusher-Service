@@ -35,7 +35,6 @@ public class Worker : BackgroundService
         {
             _connection = await _factory.CreateConnectionAsync();
             _channel = await _connection.CreateChannelAsync();
-            await _channel.QueueDeclareAsync("metrics_queue", true, false, false, null);
 
             var hubUrl = _config["HubUrl"] ?? "localhost";
             _hubConnection = new HubConnectionBuilder().WithUrl(hubUrl).WithAutomaticReconnect().Build();
